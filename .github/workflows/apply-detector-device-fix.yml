@@ -1,0 +1,51 @@
+name: Apply detector device fix
+
+on:
+  push:
+    branches: [automation/apply-detector-device-fix]
+
+permissions:
+  contents: write
+
+jobs:
+  patch-test-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix-detector-device-check
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Apply fix and regression tests
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          source_path = Path('src/synthid_text/detector_bayesian.py')
+          source = source_path.read_text()
+          old = '    if torch_device.type in ("cuda", "tpu"):\n'
+          new = '    if torch_device.type not in ("cuda", "tpu"):\n'
+          if source.count(old) != 1:
+              raise RuntimeError(f'Expected exactly one device guard, found {source.count(old)}')
+          source_path.write_text(source.replace(old, new))
+
+          test_path = Path('src/synthid_text/detector_bayesian_test.py')
+          test_path.write_text('''# Copyright 2026 DeepMind Technologies Limited\n#\n# Licensed under the Apache License, Version 2.0 (the "License");\n# you may not use this file except in compliance with the License.\n# You may obtain a copy of the License at\n#\n#    http://www.apache.org/licenses/LICENSE-2.0\n#\n# Unless required by applicable law or agreed to in writing, software\n# distributed under the License is distributed on an "AS IS" BASIS,\n# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n# See the License for the specific language governing permissions and\n# limitations under the License.\n# ==============================================================================\n\nfrom absl.testing import absltest\nimport mock\nimport torch\n\nfrom synthid_text import detector_bayesian\n\n\nclass BayesianDetectorDeviceTest(absltest.TestCase):\n\n  def _train_with_device(self, device):\n    processed = (\n        mock.sentinel.train_g_values,\n        mock.sentinel.train_masks,\n        mock.sentinel.train_labels,\n        mock.sentinel.cv_g_values,\n        mock.sentinel.cv_masks,\n        mock.sentinel.cv_labels,\n    )\n    expected = (mock.sentinel.detector, 0.25)\n    with mock.patch.object(\n        detector_bayesian.BayesianDetector,\n        "process_raw_model_outputs",\n        return_value=processed,\n    ) as process_mock, mock.patch.object(\n        detector_bayesian.BayesianDetector,\n        "train_best_detector_given_g_values",\n        return_value=expected,\n    ) as train_mock:\n      result = detector_bayesian.BayesianDetector.train_best_detector(\n          tokenized_wm_outputs=[],\n          tokenized_uwm_outputs=[],\n          logits_processor=mock.sentinel.logits_processor,\n          tokenizer=mock.sentinel.tokenizer,\n          torch_device=device,\n      )\n    return result, process_mock, train_mock\n\n  def test_cuda_device_is_allowed(self):\n    result, process_mock, train_mock = self._train_with_device(\n        torch.device("cuda")\n    )\n\n    self.assertEqual(result, (mock.sentinel.detector, 0.25))\n    process_mock.assert_called_once()\n    train_mock.assert_called_once()\n\n  def test_cpu_device_is_rejected_before_processing(self):\n    with mock.patch.object(\n        detector_bayesian.BayesianDetector, "process_raw_model_outputs"\n    ) as process_mock:\n      with self.assertRaisesRegex(ValueError, "training unstable on CPUs"):\n        detector_bayesian.BayesianDetector.train_best_detector(\n            tokenized_wm_outputs=[],\n            tokenized_uwm_outputs=[],\n            logits_processor=mock.sentinel.logits_processor,\n            tokenizer=mock.sentinel.tokenizer,\n            torch_device=torch.device("cpu"),\n        )\n\n    process_mock.assert_not_called()\n\n\nif __name__ == "__main__":\n  absltest.main()\n''')
+          PY
+      - name: Install package and tests
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Run tests
+        run: python -m pytest -q
+      - name: Check diff
+        run: git diff --check
+      - name: Commit tested fix
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/synthid_text/detector_bayesian.py src/synthid_text/detector_bayesian_test.py
+          git commit -m 'Fix Bayesian detector device guard'
+          git push origin HEAD:fix-detector-device-check
