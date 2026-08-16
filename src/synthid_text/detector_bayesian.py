@@ -745,7 +745,7 @@ class BayesianDetector:
             input_ids=outputs,
         )
     )
-    # context repetition mask shape [batch_size, output_len - (ngram_len - 1)]
+    # context_repetition_mask shape [batch_size, output_len - (ngram_len - 1)]
 
     combined_mask = context_repetition_mask * eos_token_mask
 
@@ -1028,7 +1028,7 @@ class BayesianDetector:
     Returns:
       Tuple of trained detector and loss achieved on CV data.
     """
-    if torch_device.type in ("cuda", "tpu"):
+    if torch_device.type not in ("cuda", "tpu"):
       raise ValueError(
           "We have found the training unstable on CPUs; we are working on"
           " a fix. Use GPU or TPU for training."
