@@ -1,4 +1,4 @@
-# Copyright 2024 DeepMind Technologies Limited
+# Copyright 2026 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -26,8 +26,8 @@ def accumulate_hash(
 ) -> torch.LongTensor:
   """Accumulate hash of data on current hash.
 
-  Method uses adapted linear congruential generator (LCG)with newlib/musl
-  parameters.
+  Method uses adapted linear congruential generator (LCG)
+  with newlib/musl parameters.
 
   This function has following property -
   f(x, data[T]) = f(f(x, data[:T - 1]), data[T])

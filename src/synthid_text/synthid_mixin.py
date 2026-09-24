@@ -1,4 +1,4 @@
-# Copyright 2024 DeepMind Technologies Limited
+# Copyright 2026 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,12 +16,13 @@
 """SynthID watermarked mixin class."""
 
 from collections.abc import Mapping
-from typing import Any, Optional, Union
+from typing import Any
 
 import immutabledict
-from synthid_text import logits_processing
 import torch
 import transformers
+
+from synthid_text import logits_processing
 
 
 DEFAULT_WATERMARKING_CONFIG = immutabledict.immutabledict({
@@ -77,7 +78,7 @@ class SynthIDSparseTopKMixin(transformers.GenerationMixin):
     warpers = transformers.LogitsProcessorList()
     warpers.append(
         logits_processing.SynthIDLogitsProcessor(
-            **DEFAULT_WATERMARKING_CONFIG, **extra_params
+            **DEFAULT_WATERMARKING_CONFIG, **extra_params  # pyrefly: ignore[bad-argument-type]
         )
     )
     return warpers
@@ -126,19 +127,17 @@ class SynthIDSparseTopKMixin(transformers.GenerationMixin):
 
     return self._construct_warper_list(extra_params)
 
-  def _sample(
+  def _sample(  # pyrefly: ignore[bad-override]
       self,
       input_ids: torch.LongTensor,
       logits_processor: transformers.LogitsProcessorList,
       stopping_criteria: transformers.StoppingCriteriaList,
       generation_config: transformers.GenerationConfig,
       synced_gpus: bool,
-      streamer: Optional["transformers.BaseStreamer"],
-      logits_warper: Optional[transformers.LogitsProcessorList] = None,
+      streamer: "transformers.BaseStreamer | None",
+      logits_warper: transformers.LogitsProcessorList | None = None,
       **model_kwargs,
-  ) -> Union[
-      transformers.generation.utils.GenerateNonBeamOutput, torch.LongTensor
-  ]:
+  ) -> transformers.generation.utils.GenerateNonBeamOutput | torch.LongTensor:
     r"""Sample sequence of tokens.
 
     Generates sequences of token ids for models with a language modeling head
@@ -214,6 +213,7 @@ class SynthIDSparseTopKMixin(transformers.GenerationMixin):
           " https://huggingface.co/docs/transformers/main/en/main_classes/text_generation#transformers.GenerationConfigfor"
           " more on how to configure the `pad_token_id`."
       )
+
     # init attention / hidden states / scores tuples
     scores = () if (return_dict_in_generate and output_scores) else None
     raw_logits = () if (return_dict_in_generate and output_logits) else None
@@ -231,7 +231,7 @@ class SynthIDSparseTopKMixin(transformers.GenerationMixin):
     # hidden states
     encoder_attentions = None
     encoder_hidden_states = None
-    if return_dict_in_generate and self.config.is_encoder_decoder:  # pytype: disable=attribute-error
+    if return_dict_in_generate and self.config.is_encoder_decoder:  # pyrefly: ignore[missing-attribute]
       encoder_attentions = (
           model_kwargs["encoder_outputs"].get("attentions")
           if output_attentions
@@ -249,18 +249,18 @@ class SynthIDSparseTopKMixin(transformers.GenerationMixin):
     unfinished_sequences = torch.ones(
         batch_size, dtype=torch.long, device=input_ids.device
     )
-    model_kwargs = self._get_initial_cache_position(input_ids, model_kwargs)  # pytype: disable=attribute-error
+    model_kwargs = self._get_initial_cache_position(input_ids, model_kwargs)  # pyrefly: ignore[missing-argument]
 
-    while self._has_unfinished_sequences(  # pytype: disable=attribute-error
+    while self._has_unfinished_sequences(  # pyrefly: ignore[missing-attribute]
         this_peer_finished, synced_gpus, device=input_ids.device
     ):
       # prepare model inputs
-      model_inputs = self.prepare_inputs_for_generation(  # pytype: disable=attribute-error
+      model_inputs = self.prepare_inputs_for_generation(  # pyrefly: ignore[missing-attribute]
           input_ids, **model_kwargs
       )
 
       # forward pass to get next token
-      outputs = self(  # pytype: disable=not-callable
+      outputs = self(  # pyrefly: ignore[not-callable]
           **model_inputs,
           return_dict=True,
           output_attentions=output_attentions,
@@ -279,7 +279,7 @@ class SynthIDSparseTopKMixin(transformers.GenerationMixin):
       indices_mapping = None
       unwatermarked_scores = None
       if do_sample:
-        *regular_warpers, watermarking_logits_warper = logits_warper
+        *regular_warpers, watermarking_logits_warper = logits_warper  # pyrefly: ignore[not-iterable]
         if not isinstance(
             watermarking_logits_warper,
             logits_processing.SynthIDLogitsProcessor,
@@ -313,22 +313,22 @@ class SynthIDSparseTopKMixin(transformers.GenerationMixin):
               1,
               next_tokens[:, None],
           )
-          scores += (score,)
+          scores += (score,)  # pyrefly: ignore[unsupported-operation]
         if output_logits:
-          raw_logits += (next_token_logits,)
+          raw_logits += (next_token_logits,)  # pyrefly: ignore[unsupported-operation]
         if output_attentions:
-          decoder_attentions += (
+          decoder_attentions += (  # pyrefly: ignore[unsupported-operation]
               (outputs.decoder_attentions,)
-              if self.config.is_encoder_decoder  # pytype: disable=attribute-error
+              if self.config.is_encoder_decoder  # pyrefly: ignore[missing-attribute]
               else (outputs.attentions,)
           )
-          if self.config.is_encoder_decoder:  # pytype: disable=attribute-error
-            cross_attentions += (outputs.cross_attentions,)
+          if self.config.is_encoder_decoder:  # pyrefly: ignore[missing-attribute]
+            cross_attentions += (outputs.cross_attentions,)  # pyrefly: ignore[unsupported-operation]
 
         if output_hidden_states:
-          decoder_hidden_states += (
+          decoder_hidden_states += (  # pyrefly: ignore[unsupported-operation]
               (outputs.decoder_hidden_states,)
-              if self.config.is_encoder_decoder  # pytype: disable=attribute-error
+              if self.config.is_encoder_decoder  # pyrefly: ignore[missing-attribute]
               else (outputs.hidden_states,)
           )
 
@@ -348,10 +348,10 @@ class SynthIDSparseTopKMixin(transformers.GenerationMixin):
       input_ids = torch.cat([input_ids, next_tokens[:, None]], dim=-1)
       if streamer is not None:
         streamer.put(next_tokens.cpu())
-      model_kwargs = self._update_model_kwargs_for_generation(  # pytype: disable=attribute-error
+      model_kwargs = self._update_model_kwargs_for_generation(  # pyrefly: ignore[missing-attribute]
           outputs,
           model_kwargs,
-          is_encoder_decoder=self.config.is_encoder_decoder,  # pytype: disable=attribute-error
+          is_encoder_decoder=self.config.is_encoder_decoder,  # pyrefly: ignore[missing-attribute]
       )
 
       unfinished_sequences = unfinished_sequences & ~stopping_criteria(
@@ -368,7 +368,7 @@ class SynthIDSparseTopKMixin(transformers.GenerationMixin):
       streamer.end()
 
     if return_dict_in_generate:
-      if self.config.is_encoder_decoder:  # pytype: disable=attribute-error
+      if self.config.is_encoder_decoder:  # pyrefly: ignore[missing-attribute]
         return transformers.generation.utils.GenerateEncoderDecoderOutput(
             sequences=input_ids,
             scores=scores,

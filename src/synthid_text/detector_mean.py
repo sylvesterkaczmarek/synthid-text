@@ -1,4 +1,4 @@
-# Copyright 2024 DeepMind Technologies Limited
+# Copyright 2026 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,7 +15,6 @@
 
 """Code for Mean and Weighted Mean scoring functions."""
 
-from typing import Optional
 import jax.numpy as jnp
 
 
@@ -44,7 +43,7 @@ def mean_score(
 def weighted_mean_score(
     g_values: jnp.ndarray,
     mask: jnp.ndarray,
-    weights: Optional[jnp.ndarray] = None,
+    weights: jnp.ndarray | None = None,
 ) -> jnp.ndarray:
   """Computes the Weighted Mean score.
 

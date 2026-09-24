@@ -1,4 +1,4 @@
-# Copyright 2024 DeepMind Technologies Limited
+# Copyright 2026 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,10 +16,12 @@
 """Logit processor for supporting watermarking in HF model."""
 
 from collections.abc import Sequence
+
 import hashlib
-from synthid_text import hashing_function
 import torch
 import transformers
+
+from synthid_text import hashing_function
 
 
 def update_scores(
@@ -77,13 +79,11 @@ def update_scores_distortionary(
   for i in range(depth):
     g_values_at_depth = g_values[:, :, i]
     g_mass_at_depth = (g_values_at_depth * probs).sum(axis=1, keepdims=True)
-    coeff_not_in_g = (1 - g_mass_at_depth) ** (num_leaves - 1)
-    coeff_in_g = (1 - (1 - g_mass_at_depth) ** (num_leaves)) / g_mass_at_depth
+    coeff_not_in_g = (1 - g_mass_at_depth)**(num_leaves - 1)
+    coeff_in_g = (1 - (1 - g_mass_at_depth)**(num_leaves)) / g_mass_at_depth
     coeffs = torch.where(
         torch.logical_and(g_values_at_depth == 1, probs > 0),
-        coeff_in_g,
-        coeff_not_in_g,
-    )
+        coeff_in_g, coeff_not_in_g)
     probs = probs * coeffs
 
   log_probs = torch.log(probs)
@@ -143,7 +143,7 @@ class SynthIDLogitsProcessor(transformers.LogitsProcessor):
       device: torch.device,
       skip_first_ngram_calls: bool = False,
       apply_top_k: bool = True,
-      num_leaves: int = 2,
+      num_leaves: int = 2
   ):
     """Initializes the logits processor.
 
@@ -164,14 +164,13 @@ class SynthIDLogitsProcessor(transformers.LogitsProcessor):
     # Hash the keys to a string to be used as initialization vector (IV)
     # for the hash function. Very important to have an unpredictable IV.
     self.hash_iv = hashlib.sha256(
-        self.keys.to(torch.long).numpy().tobytes()
-    ).digest()
+        self.keys.to(torch.long).numpy().tobytes()).digest()
 
     # Assuming that the platform supports int64.
     torch_long_max = torch.iinfo(torch.int64).max
-    self.hash_iv = (
-        int.from_bytes(self.hash_iv, byteorder="big") % torch_long_max
-    )
+    self.hash_iv = int.from_bytes(
+        self.hash_iv, byteorder="big") % torch_long_max
+
     self.context_history_size = context_history_size
     self.device = device
     self.state = None
@@ -293,6 +292,7 @@ class SynthIDLogitsProcessor(transformers.LogitsProcessor):
 
     # 3. Sample g values by taking the lowest bit of the hash.
     g_values = self.get_gvals(ngram_keys)
+
     # g_values shape [batch_size, top_k, depth]
 
     # 4. Modify scores.
@@ -329,7 +329,7 @@ class SynthIDLogitsProcessor(transformers.LogitsProcessor):
       self,
       ngram_keys: torch.LongTensor,
       num_apply_hash: int = 12,
-      shift: int = 0,
+      shift: int | None = None,
   ) -> torch.LongTensor:
     """Samples g values from the computed ngram keys.
 
@@ -380,9 +380,9 @@ class SynthIDLogitsProcessor(transformers.LogitsProcessor):
     batch_size, _, _ = ngrams.shape
 
     # Initialize hash result with the same hash_iv for all batch entries.
-    hash_result = torch.full(
-        (batch_size,), self.hash_iv, dtype=torch.long, device=self.device
-    )
+    hash_result = torch.full((batch_size,), self.hash_iv,  # pyrefly: ignore[no-matching-overload]
+                             dtype=torch.long, device=self.device)
+
     # hash_result shape [batch_size,]
     # ngrams shape [batch_size, num_ngrams, ngram_len]
     hash_result = torch.vmap(
@@ -417,9 +417,9 @@ class SynthIDLogitsProcessor(transformers.LogitsProcessor):
     batch_size, _ = n_minus_1_grams.shape
 
     # Initialize hash result with the same hash_iv for all batch entries.
-    hash_result = torch.full(
-        (batch_size,), self.hash_iv, dtype=torch.long, device=self.device
-    )
+    hash_result = torch.full((batch_size,), self.hash_iv,  # pyrefly: ignore[no-matching-overload]
+                             dtype=torch.long, device=self.device)
+
     # First hash n_minus_1 gram, for each batch entry we have a single
     # n_minus_1 gram context.
     # hash_result shape [batch_size]
@@ -444,6 +444,7 @@ class SynthIDLogitsProcessor(transformers.LogitsProcessor):
     hash_result = torch.vmap(
         hashing_function.accumulate_hash, in_dims=(None, 2), out_dims=2
     )(hash_result, keys)
+
     # hash_result shape should be [batch_size, num_indices, depth]
     return hash_result, hash_result_with_just_context
 
@@ -505,9 +506,8 @@ class SynthIDLogitsProcessor(transformers.LogitsProcessor):
     for i in range(num_contexts):
       context = contexts[:, i, :]
       # Initialize hash result with the same hash_iv for all batch entries.
-      hash_result = torch.full(
-          (batch_size,), self.hash_iv, dtype=torch.long, device=self.device
-      )
+      hash_result = torch.full((batch_size,), self.hash_iv,  # pyrefly: ignore[no-matching-overload]
+                               dtype=torch.long, device=self.device)
       context_hash = hashing_function.accumulate_hash(hash_result, context)[
           :, None
       ]

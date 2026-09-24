@@ -1,4 +1,4 @@
-# Copyright 2024 DeepMind Technologies Limited
+# Copyright 2026 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,11 +19,12 @@ from absl.testing import absltest
 from absl.testing import parameterized
 import immutabledict
 import numpy as np
+import torch
+import tqdm
+
 from synthid_text import g_value_expectations
 from synthid_text import logits_processing
 from synthid_text import torch_testing
-import torch
-import tqdm
 
 
 def does_mean_g_value_matches_theoretical(
@@ -90,6 +91,7 @@ def does_mean_g_value_matches_theoretical(
   )
 
   probs = torch.nn.functional.softmax(updated_scores, dim=1)
+  generator = torch.Generator(device=device).manual_seed(0)
   next_tokens = torch.multinomial(
       probs,
       num_samples=1,
@@ -157,7 +159,7 @@ class LogitsProcessorCorrectnessTest(parameterized.TestCase):
     )
 
     logits_processor = logits_processing.SynthIDLogitsProcessor(
-        **watermarking_config, top_k=10, temperature=1.0
+        **watermarking_config, top_k=10, temperature=1.0  # pyrefly: ignore[bad-argument-type]
     )
     g_values = logits_processor.compute_g_values(ngrams)
     g_values_mean = torch.mean(torch.mean(g_values.float(), dim=0))
@@ -193,7 +195,7 @@ class LogitsProcessorCorrectnessTest(parameterized.TestCase):
     )
 
     logits_processor = logits_processing.SynthIDLogitsProcessor(
-        **watermarking_config, top_k=10, temperature=1.0
+        **watermarking_config, top_k=10, temperature=1.0  # pyrefly: ignore[bad-argument-type]
     )
     ngram_keys, _ = logits_processor._compute_keys(
         n_minus_1_grams,
@@ -225,7 +227,7 @@ class LogitsProcessorCorrectnessTest(parameterized.TestCase):
       })
 
       logits_processor = logits_processing.SynthIDLogitsProcessor(
-          **watermarking_config,
+          **watermarking_config,  # pyrefly: ignore[bad-argument-type]
           top_k=vocab_size,
           temperature=temperature,
           apply_top_k=False,
@@ -301,6 +303,7 @@ class LogitsProcessorCorrectnessTest(parameterized.TestCase):
       num_leaves: int = 2,
   ):
     """Check if watermarked distribution converges to input distribution."""
+    del num_layers
     device = torch_testing.torch_device()
     mean, expected, passes = does_mean_g_value_matches_theoretical(
         vocab_size=vocab_size,
@@ -336,7 +339,7 @@ class LogitsProcessorTest(absltest.TestCase):
         'device': device,
     })
     logits_processor = logits_processing.SynthIDLogitsProcessor(
-        **watermarking_config, top_k=top_k, temperature=1.0
+        **watermarking_config, top_k=top_k, temperature=1.0  # pyrefly: ignore[bad-argument-type]
     )
     sequences = torch.randint(
         low=0,

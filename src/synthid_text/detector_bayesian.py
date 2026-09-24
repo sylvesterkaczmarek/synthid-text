@@ -1,4 +1,4 @@
-# Copyright 2024 DeepMind Technologies Limited
+# Copyright 2026 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@ from collections.abc import Mapping, Sequence
 import enum
 import functools
 import gc
-from typing import Any, Optional, Union
+from typing import Any
 import flax.linen as nn
 import jax
 import jax.numpy as jnp
@@ -35,13 +35,13 @@ from synthid_text import logits_processing
 
 
 def pad_to_len(
-    arr: torch.tensor,
+    arr: torch.tensor,  # pyrefly: ignore[not-a-type]
     target_len: int,
     *,
     left_pad: bool,
     eos_token: int,
     device: torch.device,
-) -> torch.tensor:
+) -> torch.tensor:  # pyrefly: ignore[not-a-type]
   """Pad or truncate array to given length."""
   if arr.shape[1] < target_len:
     shape_for_ones = list(arr.shape)
@@ -63,10 +63,10 @@ def pad_to_len(
 
 
 def filter_and_truncate(
-    outputs: torch.tensor,
-    truncation_length: Optional[int],
-    eos_token_mask: torch.tensor,
-) -> torch.tensor:
+    outputs: torch.tensor,  # pyrefly: ignore[not-a-type]
+    truncation_length: int | None,
+    eos_token_mask: torch.tensor,  # pyrefly: ignore[not-a-type]
+) -> torch.tensor:  # pyrefly: ignore[not-a-type]
   """Filter and truncate outputs to given length.
 
   Args:
@@ -90,13 +90,13 @@ def process_outputs_for_training(
     logits_processor: logits_processing.SynthIDLogitsProcessor,
     tokenizer: Any,
     *,
-    pos_truncation_length: Optional[int],
-    neg_truncation_length: Optional[int],
+    pos_truncation_length: int | None,
+    neg_truncation_length: int | None,
     max_length: int,
     is_cv: bool,
     is_pos: bool,
     torch_device: torch.device,
-) -> tuple[Sequence[torch.tensor], Sequence[torch.tensor]]:
+) -> tuple[Sequence[torch.tensor], Sequence[torch.tensor]]:  # pyrefly: ignore[not-a-type]
   """Process raw model outputs into format understandable by the detector.
 
   Args:
@@ -233,7 +233,7 @@ class LikelihoodModelWatermarked(nn.Module, LikelihoodModel):
   """
 
   watermarking_depth: int
-  params: Optional[Mapping[str, Mapping[str, Any]]] = None
+  params: Mapping[str, Mapping[str, Any]] | None = None
 
   def setup(self):
     """Initializes the model parameters."""
@@ -357,12 +357,12 @@ def _compute_posterior(
     Posterior probability P(watermarked|g_values), shape [batch].
   """
   mask = jnp.expand_dims(mask, -1)
-  prior = jnp.clip(prior, a_min=1e-5, a_max=1 - 1e-5)
+  prior = jnp.clip(prior, min=1e-5, max=1 - 1e-5)  # pyrefly: ignore[bad-assignment]
   log_likelihoods_watermarked = jnp.log(
-      jnp.clip(likelihoods_watermarked, a_min=1e-30, a_max=float("inf"))
+      jnp.clip(likelihoods_watermarked, min=1e-30, max=float("inf"))
   )
   log_likelihoods_unwatermarked = jnp.log(
-      jnp.clip(likelihoods_unwatermarked, a_min=1e-30, a_max=float("inf"))
+      jnp.clip(likelihoods_unwatermarked, min=1e-30, max=float("inf"))
   )
   log_odds = log_likelihoods_watermarked - log_likelihoods_unwatermarked
 
@@ -394,7 +394,7 @@ class BayesianDetectorModule(nn.Module):
   """
 
   watermarking_depth: int  # The number of tournament layers.
-  params: Optional[Mapping[str, Mapping[str, Any]]] = None
+  params: Mapping[str, Mapping[str, Any]] | None = None
   baserate: float = 0.5  # Prior probability P(w) that a text is watermarked.
 
   @property
@@ -408,7 +408,7 @@ class BayesianDetectorModule(nn.Module):
     """Initializes the model parameters."""
 
     def _fetch_params():
-      return {"params:": self.params["params"]["likelihood_model_watermarked"]}
+      return {"params:": self.params["params"]["likelihood_model_watermarked"]}  # pyrefly: ignore[unsupported-operation]
 
     self.likelihood_model_watermarked = LikelihoodModelWatermarked(
         watermarking_depth=self.watermarking_depth,
@@ -442,12 +442,12 @@ class BayesianDetectorModule(nn.Module):
 
   def score(
       self,
-      g_values: Union[jnp.ndarray, Sequence[jnp.ndarray]],
+      g_values: jnp.ndarray | Sequence[jnp.ndarray],
       mask: jnp.ndarray,
   ) -> jnp.ndarray:
     if self.params is None:
       raise ValueError("params must be set before calling score")
-    return self.apply(self.params, g_values, mask, method=self.__call__)
+    return self.apply(self.params, g_values, mask, method=self.__call__)  # pyrefly: ignore[bad-return]
 
 
 def xentropy_loss(y: jnp.ndarray, y_pred: jnp.ndarray) -> jnp.ndarray:
@@ -468,8 +468,8 @@ def loss_fn(
       params, *detector_inputs, method=detector_module.__call__
   )
   unweighted_l2 = detector_module.apply(params, method=detector_module.l2_loss)
-  l2_loss = l2_batch_weight * unweighted_l2
-  return xentropy_loss(w_true, w_pred) + l2_loss
+  l2_loss = l2_batch_weight * unweighted_l2  # pyrefly: ignore[unsupported-operation]
+  return xentropy_loss(w_true, w_pred) + l2_loss  # pyrefly: ignore[bad-argument-type]
 
 
 def tpr_at_fpr(
@@ -522,9 +522,9 @@ def train(
     seed: int = 0,
     l2_weight: float = 0.0,
     shuffle: bool = True,
-    g_values_val: Optional[jnp.ndarray] = None,
-    mask_val: Optional[jnp.ndarray] = None,
-    watermarked_val: Optional[jnp.ndarray] = None,
+    g_values_val: jnp.ndarray | None = None,
+    mask_val: jnp.ndarray | None = None,
+    watermarked_val: jnp.ndarray | None = None,
     verbose: bool = False,
     validation_metric: ValidationMetric = ValidationMetric.TPR_AT_FPR,
 ) -> tuple[Mapping[int, Mapping[str, PyTree]], float]:
@@ -582,7 +582,7 @@ def train(
     tpr_ = tpr_at_fpr(
         params=params,
         detector_inputs=(g_values_val, mask_val),
-        w_true=watermarked_val,
+        w_true=watermarked_val,  # pyrefly: ignore[bad-argument-type]
         minibatch_size=minibatch_size,
         detector_module=detector_module,
     )
@@ -761,14 +761,14 @@ class BayesianDetector:
   def process_raw_model_outputs(
       cls,
       *,
-      tokenized_wm_outputs: Union[Sequence[np.ndarray], np.ndarray],
-      tokenized_uwm_outputs: Union[Sequence[np.ndarray], np.ndarray],
+      tokenized_wm_outputs: Sequence[np.ndarray] | np.ndarray,
+      tokenized_uwm_outputs: Sequence[np.ndarray] | np.ndarray,
       logits_processor: logits_processing.SynthIDLogitsProcessor,
       tokenizer: Any,
       torch_device: torch.device,
       test_size: float = 0.3,
-      pos_truncation_length: Optional[int] = 200,
-      neg_truncation_length: Optional[int] = 100,
+      pos_truncation_length: int | None = 200,
+      neg_truncation_length: int | None = 100,
       max_padded_length: int = 2300,
   ) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
     """Process raw models outputs into inputs we can train.
@@ -860,20 +860,20 @@ class BayesianDetector:
 
     # We get list of data; here we concat all together to be passed to the
     # detector.
-    wm_masks_train = torch.cat(wm_masks_train, dim=0)
-    wm_g_values_train = torch.cat(wm_g_values_train, dim=0)
+    wm_masks_train = torch.cat(wm_masks_train, dim=0)  # pyrefly: ignore[bad-argument-type]
+    wm_g_values_train = torch.cat(wm_g_values_train, dim=0)  # pyrefly: ignore[bad-argument-type]
     wm_labels_train = torch.ones((wm_masks_train.shape[0],), dtype=torch.bool)
-    wm_masks_cv = torch.cat(wm_masks_cv, dim=0)
-    wm_g_values_cv = torch.cat(wm_g_values_cv, dim=0)
+    wm_masks_cv = torch.cat(wm_masks_cv, dim=0)  # pyrefly: ignore[bad-argument-type]
+    wm_g_values_cv = torch.cat(wm_g_values_cv, dim=0)  # pyrefly: ignore[bad-argument-type]
     wm_labels_cv = torch.ones((wm_masks_cv.shape[0],), dtype=torch.bool)
 
-    uwm_masks_train = torch.cat(uwm_masks_train, dim=0)
-    uwm_g_values_train = torch.cat(uwm_g_values_train, dim=0)
+    uwm_masks_train = torch.cat(uwm_masks_train, dim=0)  # pyrefly: ignore[bad-argument-type]
+    uwm_g_values_train = torch.cat(uwm_g_values_train, dim=0)  # pyrefly: ignore[bad-argument-type]
     uwm_labels_train = torch.zeros(
         (uwm_masks_train.shape[0],), dtype=torch.bool
     )
-    uwm_masks_cv = torch.cat(uwm_masks_cv, dim=0)
-    uwm_g_values_cv = torch.cat(uwm_g_values_cv, dim=0)
+    uwm_masks_cv = torch.cat(uwm_masks_cv, dim=0)  # pyrefly: ignore[bad-argument-type]
+    uwm_g_values_cv = torch.cat(uwm_g_values_cv, dim=0)  # pyrefly: ignore[bad-argument-type]
     uwm_labels_cv = torch.zeros((uwm_masks_cv.shape[0],), dtype=torch.bool)
 
     # Concat pos and negatives data together.
@@ -881,20 +881,20 @@ class BayesianDetector:
         torch.cat((wm_g_values_train, uwm_g_values_train), dim=0).cpu().numpy()
     )
     train_labels = (
-        torch.cat((wm_labels_train, uwm_labels_train), axis=0).cpu().numpy()
+        torch.cat((wm_labels_train, uwm_labels_train), axis=0).cpu().numpy()  # pyrefly: ignore[unexpected-keyword]
     )
     train_masks = (
-        torch.cat((wm_masks_train, uwm_masks_train), axis=0).cpu().numpy()
+        torch.cat((wm_masks_train, uwm_masks_train), axis=0).cpu().numpy()  # pyrefly: ignore[unexpected-keyword]
     )
 
     cv_g_values = (
-        torch.cat((wm_g_values_cv, uwm_g_values_cv), axis=0).cpu().numpy()
+        torch.cat((wm_g_values_cv, uwm_g_values_cv), axis=0).cpu().numpy()  # pyrefly: ignore[unexpected-keyword]
     )
-    cv_labels = torch.cat((wm_labels_cv, uwm_labels_cv), axis=0).cpu().numpy()
-    cv_masks = torch.cat((wm_masks_cv, uwm_masks_cv), axis=0).cpu().numpy()
+    cv_labels = torch.cat((wm_labels_cv, uwm_labels_cv), axis=0).cpu().numpy()  # pyrefly: ignore[unexpected-keyword]
+    cv_masks = torch.cat((wm_masks_cv, uwm_masks_cv), axis=0).cpu().numpy()  # pyrefly: ignore[unexpected-keyword]
 
     # Free up GPU memory.
-    del (
+    del (  # pyrefly: ignore[unsupported-delete]
         wm_g_values_train,
         wm_labels_train,
         wm_masks_train,
@@ -928,7 +928,7 @@ class BayesianDetector:
     cv_labels = cv_labels[shuffled_idx]
     cv_masks = cv_masks[shuffled_idx]
 
-    return (
+    return (  # pyrefly: ignore[bad-return]
         train_g_values,
         train_masks,
         train_labels,
@@ -980,20 +980,20 @@ class BayesianDetector:
         lowest_loss = min_val_loss
         best_detector = detector_module
 
-    return cls(logits_processor, tokenizer, best_detector.params), lowest_loss
+    return cls(logits_processor, tokenizer, best_detector.params), lowest_loss  # pyrefly: ignore[missing-attribute]
 
   @classmethod
   def train_best_detector(
       cls,
       *,
-      tokenized_wm_outputs: Union[Sequence[np.ndarray], np.ndarray],
-      tokenized_uwm_outputs: Union[Sequence[np.ndarray], np.ndarray],
+      tokenized_wm_outputs: Sequence[np.ndarray] | np.ndarray,
+      tokenized_uwm_outputs: Sequence[np.ndarray] | np.ndarray,
       logits_processor: logits_processing.SynthIDLogitsProcessor,
       tokenizer: Any,
       torch_device: torch.device,
       test_size: float = 0.3,
-      pos_truncation_length: Optional[int] = 200,
-      neg_truncation_length: Optional[int] = 100,
+      pos_truncation_length: int | None = 200,
+      neg_truncation_length: int | None = 100,
       max_padded_length: int = 2300,
       n_epochs: int = 50,
       learning_rate: float = 2.1e-2,
@@ -1033,7 +1033,7 @@ class BayesianDetector:
           "We have found the training unstable on CPUs; we are working on"
           " a fix. Use GPU or TPU for training."
       )
-    (
+    (  # pyrefly: ignore[bad-unpacking]
         train_g_values,
         train_masks,
         train_labels,

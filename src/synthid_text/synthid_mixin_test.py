@@ -1,4 +1,4 @@
-# Copyright 2024 DeepMind Technologies Limited
+# Copyright 2026 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,11 +21,11 @@ import torch
 import transformers
 from transformers import utils as transformers_utils
 
-from synthid_text import synthid_mixin
 from synthid_text import logits_processing
+from synthid_text import synthid_mixin
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, kw_only=True)
 class Config:
 
   is_encoder_decoder: bool = True
